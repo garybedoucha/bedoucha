@@ -1,0 +1,79 @@
+---
+title: "DP"
+author: "Gary"
+date: "12/03/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Density Estimation with the Dirichlet Process
+
+# Import data
+
+
+
+```{r }
+data <- read.csv("/Users/Bedoucha/Desktop/faithful.csv")
+head(faithful)
+```
+```{r}
+install.packages('ggplot2') 
+```
+We are interested in the distribution of the waiting times between eruptions. When we look at a histogram of the waiting times we find that the data is bimodal.
+
+```{r}
+library(ggplot2)
+ggplot(faithful, aes(x=waiting)) + geom_histogram(binwidth = 1)
+```
+
+We believe that the waiting data is from a mixture of Normal distributions with parameters. `
+
+```{r}
+install.packages('dirichletprocess')
+library(dirichletprocess)
+```
+
+Now we want to transform our data so that it is zero mean and unit variance. Always a good idea for any machine learning problem.
+```{r}
+faithfulTrans <- (faithful$waiting - mean(faithful$waiting))/sd(faithful$waiting)
+```
+
+Now we want to create our dirichletprocess object. As it is a mixture of Normal distributions, we want to use the DirichletProcessGaussian function.
+```{r}
+dp <- DirichletProcessGaussian(faithfulTrans)
+```
+
+
+As this is a Bayesian method, we now wish to sample from the posterior distribution. To do this, we use the Fit function on the dp object and specify how many iterations we wish to run for. In this case 1000 will be plenty.
+```{r}
+dp <- Fit(dp, 1000)
+```
+```{r}
+plot(dp)
+```
+Here we can see the posterior mean of the found distribution. 
+
+```{r}
+data.frame(Weights=dp$weights,
+                  mu=c(dp$clusterParameters[[1]]),
+                  sigma=c(dp$clusterParameters[[2]]))
+```
+
+From the weights, we can see that 60% of the data points are associated with a cluster parameter.
+
+If we want to plot our posterior estimate against our original histogram, we simply have to obtain samples of the posterior distribution.
+```{r}
+xGrid <- seq(-3, 3, by=0.01)
+postSamples <- data.frame(replicate(100, PosteriorFunction(dp)(xGrid)))
+
+postFrame <- data.frame(x=xGrid, y=rowMeans(postSamples))
+```
+
+```{r}
+ggplot() + geom_histogram(data=data.frame(x=faithfulTrans), aes(x=x, y=..density..), binwidth = 0.25) + geom_line(data=postFrame, aes(x=x,y=y), colour='red')
+```
+
+So there we have it. We have successfully modelled the faithful waiting times as a infinite mixture of Gaussian distributions using a Dirichlet process thanks to the dirichletprocess package.
